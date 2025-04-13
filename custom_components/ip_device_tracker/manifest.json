@@ -1,8 +1,8 @@
 {
   "domain": "ip_device_tracker",
-  "name": "IP Device Tracker",
+  "name": "IPdot",
   "version": "2.0.0",
-  "documentation": "https://github.com/clingwl/IP-DOT",
+  "documentation": "https://github.com/clingwl/ip_device_tracker",
   "requirements": ["python-ping3>=4.0.4"],
   "codeowners": ["@Clingwl"],
   "iot_class": "local_polling",

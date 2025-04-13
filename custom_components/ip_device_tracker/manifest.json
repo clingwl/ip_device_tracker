@@ -1,7 +1,11 @@
 {
   "domain": "ip_device_tracker",
   "name": "IPdot",
+<<<<<<< HEAD
   "version": "1.0.2",
+=======
+  "version": "1.0.1",
+>>>>>>> 3e01a7a89a7d0968efa30883db3537ef5e0ecc30
   "documentation": "https://github.com/clingwl/ip_device_tracker",
   "requirements": ["python-ping3>=4.0.4"],
   "codeowners": ["@Clingwl"],

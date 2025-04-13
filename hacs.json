@@ -1,0 +1,6 @@
+{
+  "name": "IP Device Tracker",
+  "render_readme": true,     // 是否在 HACS 界面渲染 README.md
+  "domains": ["device_tracker"],  // 插件支持的域
+  "homeassistant": "2023.8.0"     // 最低 HA 版本要求
+}

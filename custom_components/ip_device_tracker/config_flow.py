@@ -1,8 +1,8 @@
-from homeassistant import config_entries
-from homeassistant.core import callback
-import voluptuous as vol
-from ping3 import ping
+import asyncio
+import platform
 import logging
+import voluptuous as vol
+from homeassistant import config_entries
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -13,15 +13,11 @@ class IPDeviceTrackerConfigFlow(config_entries.ConfigFlow, domain="ip_device_tra
     async def async_step_user(self, user_input=None):
         errors = {}
         if user_input is not None:
-            # 检查IP是否重复
             if any(entry.data["ip"] == user_input["ip"] 
                    for entry in self._async_current_entries()):
                 errors["base"] = "already_configured"
             else:
-                # 验证IP可达性
-                valid = await self.hass.async_add_executor_job(
-                    self._validate_ip, user_input["ip"]
-                )
+                valid = await self._async_validate_ip(user_input["ip"])
                 if valid:
                     return self.async_create_entry(
                         title=user_input.get("name", user_input["ip"]), 
@@ -38,35 +34,24 @@ class IPDeviceTrackerConfigFlow(config_entries.ConfigFlow, domain="ip_device_tra
         return self.async_show_form(
             step_id="user",
             data_schema=data_schema,
-            errors=errors,
-            description_placeholders={"error_info": ""}
+            errors=errors
         )
 
-    @staticmethod
-    def _validate_ip(ip: str) -> bool:
+    async def _async_validate_ip(self, ip: str) -> bool:
+        """异步验证IP地址"""
+        os_type = platform.system().lower()
+        if os_type == "windows":
+            ping_cmd = ["ping", "-n", "1", "-w", "2000", ip]
+        else:
+            ping_cmd = ["ping", "-c", "1", "-W", "2", ip]
+
         try:
-            return ping(ip, timeout=2) is not None
-        except Exception as e:
-            _LOGGER.error("Ping error: %s", e)
+            proc = await asyncio.create_subprocess_exec(
+                *ping_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            await asyncio.wait_for(proc.communicate(), timeout=5)
+            return proc.returncode == 0
+        except (asyncio.TimeoutError, Exception):
             return False
-
-    @staticmethod
-    @callback
-    def async_get_options_flow(config_entry):
-        return OptionsFlowHandler(config_entry)
-
-class OptionsFlowHandler(config_entries.OptionsFlow):
-    def __init__(self, config_entry):
-        self.config_entry = config_entry
-
-    async def async_step_init(self, user_input=None):
-        if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
-
-        return self.async_show_form(
-            step_id="init",
-            data_schema=vol.Schema({
-                vol.Required("ip", default=self.config_entry.data["ip"]): str,
-                vol.Optional("name", default=self.config_entry.data.get("name", "")): str,
-            })
-        )

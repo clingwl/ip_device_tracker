@@ -6,6 +6,18 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+async def async_get_scanner(hass, config):
+    devices = []
+    for entry in hass.config_entries.async_entries("ip_device_tracker"):
+        devices.append({
+            "ip": entry.data["ip"],
+            "name": entry.data.get("name", entry.data["ip"])
+        })
+    
+    scanner = IPDeviceScanner(hass, devices)
+    await scanner.async_init()
+    return scanner
+
 class IPDeviceScanner(DeviceScanner):
     def __init__(self, hass, devices):
         self.hass = hass
@@ -27,20 +39,20 @@ class IPDeviceScanner(DeviceScanner):
         for device in self._devices:
             ip = device["ip"]
             try:
-                # 异步执行系统 ping 命令
-                result = await self._async_ping(ip)
-                results[ip] = result
+                results[ip] = await self._async_ping(ip)
             except Exception as e:
-                _LOGGER.error("Ping error for %s: %s", ip, e)
+                _LOGGER.error("Ping error: %s", e)
                 results[ip] = False
         return results
 
     async def _async_ping(self, ip: str) -> bool:
-        """跨平台异步 ping 实现"""
-        # 根据操作系统选择 ping 参数
-        ping_cmd = ["ping", "-n", "1", "-w", "2000", ip] if platform.system().lower() == "windows" else ["ping", "-c", "1", "-W", "2", ip]
-        
-        # 异步执行子进程
+        """跨平台ping实现"""
+        os_type = platform.system().lower()
+        if os_type == "windows":
+            ping_cmd = ["ping", "-n", "1", "-w", "2000", ip]
+        else:
+            ping_cmd = ["ping", "-c", "1", "-W", "2", ip]
+
         proc = await asyncio.create_subprocess_exec(
             *ping_cmd,
             stdout=asyncio.subprocess.PIPE,
@@ -53,3 +65,17 @@ class IPDeviceScanner(DeviceScanner):
             proc.kill()
             await proc.communicate()
             return False
+        except Exception as e:
+            _LOGGER.debug("Ping error: %s", e)
+            return False
+
+    async def async_scan_devices(self):
+        await self.coordinator.async_request_refresh()
+        return [dev["ip"] for dev in self._devices 
+                if self.coordinator.data.get(dev["ip"], False)]
+
+    async def async_get_device_name(self, device):
+        return next(
+            (dev["name"] for dev in self._devices if dev["ip"] == device),
+            device
+        )

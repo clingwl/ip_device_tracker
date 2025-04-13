@@ -1,0 +1,17 @@
+{
+    "config": {
+      "abort": {
+        "already_configured": "This IP is already configured",
+        "cannot_connect": "Could not connect to the device"
+      },
+      "step": {
+        "user": {
+          "description": "Add an IP address to track its online status",
+          "data": {
+            "ip": "IP Address",
+            "name": "Device Name (optional)"
+          }
+        }
+      }
+    }
+  }

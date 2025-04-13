@@ -1,23 +1,10 @@
+import asyncio
+import platform
 import logging
 from homeassistant.components.device_tracker import DeviceScanner
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
-from ping3 import ping
-import async_timeout
 
 _LOGGER = logging.getLogger(__name__)
-
-async def async_get_scanner(hass, config):
-    """Get scanner."""
-    devices = []
-    for entry in hass.config_entries.async_entries("ip_device_tracker"):
-        devices.append({
-            "ip": entry.data["ip"],
-            "name": entry.data.get("name", entry.data["ip"])
-        })
-    
-    scanner = IPDeviceScanner(hass, devices)
-    await scanner.async_init()
-    return scanner
 
 class IPDeviceScanner(DeviceScanner):
     def __init__(self, hass, devices):
@@ -40,26 +27,29 @@ class IPDeviceScanner(DeviceScanner):
         for device in self._devices:
             ip = device["ip"]
             try:
-                with async_timeout.timeout(5):
-                    result = await self.hass.async_add_executor_job(
-                        ping, ip, 1
-                    )
-                results[ip] = result is not None
+                # 异步执行系统 ping 命令
+                result = await self._async_ping(ip)
+                results[ip] = result
             except Exception as e:
-                _LOGGER.error("Error pinging %s: %s", ip, e)
+                _LOGGER.error("Ping error for %s: %s", ip, e)
                 results[ip] = False
         return results
 
-    async def async_scan_devices(self):
-        await self.coordinator.async_request_refresh()
-        active_devices = []
-        for device in self._devices:
-            if self.coordinator.data.get(device["ip"], False):
-                active_devices.append(device["ip"])
-        return active_devices
-
-    async def async_get_device_name(self, device):
-        for dev in self._devices:
-            if dev["ip"] == device:
-                return dev.get("name", device)
-        return device
+    async def _async_ping(self, ip: str) -> bool:
+        """跨平台异步 ping 实现"""
+        # 根据操作系统选择 ping 参数
+        ping_cmd = ["ping", "-n", "1", "-w", "2000", ip] if platform.system().lower() == "windows" else ["ping", "-c", "1", "-W", "2", ip]
+        
+        # 异步执行子进程
+        proc = await asyncio.create_subprocess_exec(
+            *ping_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        try:
+            await asyncio.wait_for(proc.communicate(), timeout=5)
+            return proc.returncode == 0
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.communicate()
+            return False
